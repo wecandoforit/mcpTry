@@ -1,23 +1,29 @@
+rule = "结婚"
+
+
 def encrypt_text(text):
     """
     将文本加密为"结婚"编码
     规则：结=1, 婚=0
-    
+
     参数:
         text: 要加密的文本字符串
-    
+
     返回:
         加密后的字符串（由"结"和"婚"组成）
     """
+    if not isinstance(text, str):
+        raise TypeError("输入必须是字符串类型")
+
     # 将文本转换为UTF-8字节序列
     bytes_data = text.encode('utf-8')
-    
+
     # 将每个字节转换为8位二进制
     binary_str = ''.join(format(byte, '08b') for byte in bytes_data)
-    
+
     # 将二进制转换为"结婚"编码
     encrypted = binary_str.replace('1', rule[0]).replace('0', rule[1])
-    
+
     return encrypted
 
 
@@ -25,27 +31,31 @@ def decrypt_text(encrypted):
     """
     将"结婚"编码解密为原文本
     规则：结=1, 婚=0
-    
+
     参数:
         encrypted: 加密后的字符串（由"结"和"婚"组成）
-    
+
     返回:
         解密后的原始文本
     """
+    if not isinstance(encrypted, str) or len(encrypted) < 1:
+        raise ValueError("加密文本必须是非空字符串")
+
     # 将"结婚"编码转换为二进制
     binary_str = encrypted.replace(rule[0], '1').replace(rule[1], '0')
-    
+
     # 将二进制转换回字节
     bytes_data = []
     for i in range(0, len(binary_str), 8):
         byte = binary_str[i:i+8]
         if len(byte) == 8:  # 确保是完整的字节
             bytes_data.append(int(byte, 2))
-    
-    # 将字节序列解码为UTF-8文本
-    return bytes(bytes_data).decode('utf-8')
 
-rule="结婚"
+    # 将字节序列解码为UTF-8文本
+    try:
+        return bytes(bytes_data).decode('utf-8')
+    except UnicodeDecodeError:
+        raise ValueError("解码失败，请检查加密数据是否完整")
 
 # 使用示例
 if __name__ == "__main__":

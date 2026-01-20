@@ -3,151 +3,180 @@ from collections import Counter
 import pickle
 import base64
 
+
 class HuffmanNode:
     def __init__(self, char, freq):
         self.char = char
         self.freq = freq
         self.left = None
         self.right = None
-    
+
     def __lt__(self, other):
         return self.freq < other.freq
 
+
 def build_huffman_tree(text):
     """构建哈夫曼树"""
+    if not text:
+        return None
+
     # 统计字符频率
     frequency = Counter(text)
-    
+
     # 创建优先队列
     heap = [HuffmanNode(char, freq) for char, freq in frequency.items()]
     heapq.heapify(heap)
-    
+
     # 构建哈夫曼树
     while len(heap) > 1:
         left = heapq.heappop(heap)
         right = heapq.heappop(heap)
-        
+
         merged = HuffmanNode(None, left.freq + right.freq)
         merged.left = left
         merged.right = right
-        
+
         heapq.heappush(heap, merged)
-    
+
     return heap[0] if heap else None
+
 
 def build_codes(root, current_code="", codes=None):
     """从哈夫曼树构建编码表"""
     if codes is None:
         codes = {}
-    
+
     if root is None:
         return codes
-    
+
     # 叶子节点
     if root.char is not None:
         codes[root.char] = current_code if current_code else "0"
         return codes
-    
+
     # 递归构建
     build_codes(root.left, current_code + "0", codes)
     build_codes(root.right, current_code + "1", codes)
-    
+
     return codes
+
 
 def encrypt_text(text):
     """
     使用哈夫曼编码将文本加密为"结婚"编码
     规则：结=1, 婚=0
-    
+
     参数:
         text: 要加密的文本字符串
-    
+
     返回:
         加密后的字符串（由"结"和"婚"组成）
     """
+    if not isinstance(text, str):
+        raise TypeError("输入必须是字符串类型")
+
     if not text:
-        return "婚"
-    
+        return "婚结"  # 使用两个字符表示空字符串，第一位表示非压缩，第二位是占位符
+
     # 构建哈夫曼树和编码表
     root = build_huffman_tree(text)
+    if root is None:
+        return "婚结"  # 空文本的情况
+
     codes = build_codes(root)
-    
+
     # 使用哈夫曼编码压缩文本
     encoded_bits = ''.join(codes[char] for char in text)
-    
+
     # 将编码表序列化
     codes_serialized = pickle.dumps(codes)
     codes_base64 = base64.b64encode(codes_serialized).decode('ascii')
-    
+
     # 将编码表转为二进制
     codes_bits = ''.join(format(ord(c), '08b') for c in codes_base64)
-    
+
     # 编码表长度（32位）
     codes_length = format(len(codes_bits), '032b')
-    
+
     # 组合：编码表长度 + 编码表 + 编码后的文本
     full_bits = codes_length + codes_bits + encoded_bits
-    
+
     # 填充到8的倍数
     padding = (8 - len(full_bits) % 8) % 8
     full_bits += '0' * padding
-    
+
     # 添加填充长度信息（3位，最多7）
     padding_info = format(padding, '03b')
     full_bits = padding_info + full_bits
-    
+
     # 转换为"结婚"编码
     encrypted = full_bits.replace('1', '结').replace('0', '婚')
-    
+
     return encrypted
+
 
 def decrypt_text(encrypted):
     """
     将"结婚"编码解密为原文本
     规则：结=1, 婚=0
-    
+
     参数:
         encrypted: 加密后的字符串（由"结"和"婚"组成）
-    
+
     返回:
         解密后的原始文本
     """
-    if encrypted == "婚":
-        return ""
-    
+    if not isinstance(encrypted, str) or len(encrypted) < 1:
+        raise ValueError("加密文本必须是非空字符串")
+
+    if encrypted == "婚结":
+        return ""  # 空字符串的特殊表示
+
     # 转换回二进制
     bits = encrypted.replace('结', '1').replace('婚', '0')
-    
+
     # 读取填充信息
+    if len(bits) < 3:
+        raise ValueError("加密数据格式错误")
     padding = int(bits[:3], 2)
     bits = bits[3:]
-    
+
     # 移除填充
     if padding > 0:
+        if len(bits) < padding:
+            raise ValueError("加密数据格式错误")
         bits = bits[:-padding]
-    
+
     # 读取编码表长度
+    if len(bits) < 32:
+        raise ValueError("加密数据格式错误")
     codes_length = int(bits[:32], 2)
     bits = bits[32:]
-    
-    # 提取编码表
+
+    # 提取编码表和编码后的文本
+    if len(bits) < codes_length:
+        raise ValueError("加密数据格式错误")
     codes_bits = bits[:codes_length]
     encoded_bits = bits[codes_length:]
-    
+
     # 将编码表转回字符串
     codes_chars = []
     for i in range(0, len(codes_bits), 8):
         byte = codes_bits[i:i+8]
-        codes_chars.append(chr(int(byte, 2)))
+        if len(byte) == 8:
+            codes_chars.append(chr(int(byte, 2)))
     codes_base64 = ''.join(codes_chars)
-    
-    # 反序列化编码表
-    codes_serialized = base64.b64decode(codes_base64)
-    codes = pickle.loads(codes_serialized)
-    
+
+    try:
+        # 反序列化编码表
+        codes_serialized = base64.b64decode(codes_base64)
+        codes = pickle.loads(codes_serialized)
+    except Exception:
+        raise ValueError("编码表解析失败，请检查加密数据是否完整")
+
     # 构建反向编码表
     reverse_codes = {v: k for k, v in codes.items()}
-    
+
     # 解码文本
     decoded_text = []
     current_code = ""
@@ -156,7 +185,7 @@ def decrypt_text(encrypted):
         if current_code in reverse_codes:
             decoded_text.append(reverse_codes[current_code])
             current_code = ""
-    
+
     return ''.join(decoded_text)
 
 # 使用示例

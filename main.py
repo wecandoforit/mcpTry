@@ -1,33 +1,37 @@
 import zlib
 
+
 def encrypt_text(text, use_compression=True):
     """
     将文本加密为"结婚"编码（支持压缩以提高信息熵）
     规则：结=1, 婚=0
-    
+
     参数:
         text: 要加密的文本字符串
         use_compression: 是否使用压缩（默认True，可大幅减少长度）
-    
+
     返回:
         加密后的字符串（由"结"和"婚"组成）
     """
+    if not isinstance(text, str):
+        raise TypeError("输入必须是字符串类型")
+
     # 将文本转换为UTF-8字节序列
     bytes_data = text.encode('utf-8')
-    
+
     # 如果启用压缩，先压缩数据
     if use_compression:
         bytes_data = zlib.compress(bytes_data)
-    
+
     # 将每个字节转换为8位二进制
     binary_str = ''.join(format(byte, '08b') for byte in bytes_data)
-    
+
     # 将二进制转换为"结婚"编码
     encrypted = binary_str.replace('1', '结').replace('0', '婚')
-    
+
     # 添加标记位表示是否压缩（第一个字符）
     marker = '结' if use_compression else '婚'
-    
+
     return marker + encrypted
 
 
@@ -35,35 +39,44 @@ def decrypt_text(encrypted):
     """
     将"结婚"编码解密为原文本（自动识别是否压缩）
     规则：结=1, 婚=0
-    
+
     参数:
         encrypted: 加密后的字符串（由"结"和"婚"组成）
-    
+
     返回:
         解密后的原始文本
     """
+    if not isinstance(encrypted, str) or len(encrypted) < 1:
+        raise ValueError("加密文本必须是非空字符串")
+
     # 读取标记位判断是否压缩
     is_compressed = (encrypted[0] == '结')
     encrypted_data = encrypted[1:]
-    
+
     # 将"结婚"编码转换为二进制
     binary_str = encrypted_data.replace('结', '1').replace('婚', '0')
-    
+
     # 将二进制转换回字节
     bytes_data = []
     for i in range(0, len(binary_str), 8):
         byte = binary_str[i:i+8]
         if len(byte) == 8:
             bytes_data.append(int(byte, 2))
-    
+
     bytes_result = bytes(bytes_data)
-    
+
     # 如果是压缩的，先解压
     if is_compressed:
-        bytes_result = zlib.decompress(bytes_result)
-    
+        try:
+            bytes_result = zlib.decompress(bytes_result)
+        except zlib.error:
+            raise ValueError("解压缩失败，请检查加密数据是否完整")
+
     # 将字节序列解码为UTF-8文本
-    return bytes_result.decode('utf-8')
+    try:
+        return bytes_result.decode('utf-8')
+    except UnicodeDecodeError:
+        raise ValueError("解码失败，请检查加密数据是否完整")
 
 
 # 使用示例
